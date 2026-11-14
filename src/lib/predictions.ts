@@ -11,7 +11,7 @@
  *   0 siklus → 'rendah', 1–2 → 'cukup', ≥3 → 'tinggi'.
  */
 
-import { addDaysISO, diffDaysISO } from './dates';
+import { addDaysISO, diffDaysISO, parseISO } from './dates';
 import type { Period } from './db';
 
 export type Confidence = 'rendah' | 'cukup' | 'tinggi';
@@ -20,13 +20,18 @@ export type Confidence = 'rendah' | 'cukup' | 'tinggi';
  * Setting yang relevan untuk prediksi. Semua opsional/nullable — pemanggil
  * boleh mengisi sebagian (mis. hanya `lastPeriodStart` dari onboarding)
  * atau `{}` bila belum ada pengaturan.
+ *
+ * PENTING: `avgCycleLength`/`avgPeriodLength` HANYA dipakai sebagai fallback
+ * saat belum ada data siklus tercatat (lalu menggantikan default 28/5).
+ * Setelah ada ≥1 periode tercatat, nilai rata-rata dihitung DARI DATA dan
+ * nilai pengaturan ini diabaikan sepenuhnya.
  */
 export interface PredictionSettings {
-  /** Tanggal haid terakhir dari onboarding (`YYYY-MM-DD`). Dipakai sebagai acuan saat belum ada periode tercatat. */
+  /** Tanggal haid terakhir dari onboarding (`YYYY-MM-DD`). Dipakai sebagai acuan saat belum ada periode tercatat. String kosong/tidak valid diperlakukan seolah belum diisi. */
   lastPeriodStart?: string | null;
-  /** Rata-rata panjang siklus (hari) dari pengaturan; menggantikan default 28 bila belum ada data. */
+  /** Rata-rata panjang siklus (hari) dari pengaturan. Hanya dipakai saat belum ada data siklus tercatat; setelah ada data, nilai dari data yang dipakai. */
   avgCycleLength?: number | null;
-  /** Rata-rata durasi haid (hari) dari pengaturan; menggantikan default 5 bila belum ada data. */
+  /** Rata-rata durasi haid (hari) dari pengaturan. Hanya dipakai saat belum ada data periode tercatat; setelah ada data, nilai dari data yang dipakai. */
   avgPeriodLength?: number | null;
 }
 
@@ -58,7 +63,15 @@ export interface LateStatus {
   daysLate: number;
 }
 
+/**
+ * Default siklus (hari) bila tidak ada pengaturan & belum ada data siklus tercatat.
+ * Hanya fallback no-data — bukan override atas data yang tercatat.
+ */
 export const DEFAULT_CYCLE_LENGTH = 28;
+/**
+ * Default durasi haid (hari) bila tidak ada pengaturan & belum ada data periode tercatat.
+ * Hanya fallback no-data — bukan override atas data yang tercatat.
+ */
 export const DEFAULT_PERIOD_LENGTH = 5;
 
 /** Salinan terurut by start (tie-break id) — input tidak dimutasi. */
@@ -79,8 +92,27 @@ function positiveOr(
 }
 
 /**
+ * `lastPeriodStart` dari settings hanya dipakai bila string non-kosong DAN
+ * valid menurut `parseISO`; selain itu undefined (seolah belum diisi).
+ */
+function validLastPeriodStart(
+  value: string | null | undefined
+): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  try {
+    parseISO(value);
+    return value;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Statistik siklus dari daftar periode. `fallbackCycle`/`fallbackPeriod`
- * dipakai bila belum ada data (atau belum ada siklus lengkap); pemanggil
+ * HANYA dipakai saat belum ada data (atau belum ada siklus lengkap untuk
+ * fallbackCycle); setelah ada data, rata-rata dihitung dari data. Pemanggil
  * dapat meneruskan nilai dari pengaturan, default 28/5.
  */
 export function computeStats(
@@ -127,7 +159,8 @@ function confidenceFor(cyclesLogged: number): Confidence {
 /**
  * Prediksi siklus berikutnya.
  * - Acuan (anchor): start haid terakhir bila ada; selain itu `settings.lastPeriodStart`
- *   (onboarding); terakhir `todayISO` supaya prediksi tetap valid meski belum ada data sama sekali.
+ *   (onboarding; string kosong/tidak valid diabaikan); terakhir `todayISO` supaya
+ *   prediksi tetap valid meski belum ada data sama sekali.
  * - `predictedStart` = anchor + rata-rata siklus (dibulatkan); `predictedEnd` = + durasi − 1.
  * - `ovulation` = predictedStart − 14, `fertileStart` = − 19, `fertileEnd` = − 11.
  */
@@ -148,7 +181,7 @@ export function predictNext(
   const anchor =
     sorted.length > 0
       ? sorted[sorted.length - 1].start
-      : settings.lastPeriodStart ?? todayISO;
+      : validLastPeriodStart(settings.lastPeriodStart) ?? todayISO;
 
   const predictedStart = addDaysISO(anchor, avgCycle);
   const predictedEnd = addDaysISO(predictedStart, avgPeriod - 1);
@@ -169,8 +202,10 @@ export function predictNext(
 }
 
 /**
- * Status keterlambatan: hari ini SETELAH predictedStart DAN belum ada
- * periode yang tercatat mulai pada/setelah tanggal prediksi tersebut.
+ * Status keterlambatan: hari ini SETELAH predictedStart. Karena prediksi
+ * selalu berlabuh pada periode tercatat/onboarding, hari ini > predictedStart
+ * berarti belum ada periode baru yang tercatat untuk siklus berjalan —
+ * setiap periode baru yang dicatat akan menggeser predictedStart ke masa depan.
  */
 export function lateStatus(
   periods: Period[],
@@ -178,10 +213,7 @@ export function lateStatus(
   settings: PredictionSettings = {}
 ): LateStatus {
   const prediction = predictNext(periods, todayISO, settings);
-  const recorded = sortedByStart(periods).some(
-    (p) => p.start >= prediction.predictedStart
-  );
-  const isLate = todayISO > prediction.predictedStart && !recorded;
+  const isLate = todayISO > prediction.predictedStart;
   return {
     isLate,
     daysLate: isLate ? diffDaysISO(prediction.predictedStart, todayISO) : 0,

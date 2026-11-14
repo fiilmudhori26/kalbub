@@ -86,6 +86,20 @@ describe('predictNext', () => {
     expect(pred.confidence).toBe('rendah');
   });
 
+  it('lastPeriodStart string kosong diperlakukan seolah belum diisi', () => {
+    const pred = predictNext([], '2026-10-05', { lastPeriodStart: '' });
+    expect(pred.predictedStart).toBe('2026-11-02'); // todayISO + 28
+    expect(pred.confidence).toBe('rendah');
+  });
+
+  it('lastPeriodStart tidak valid diperlakukan seolah belum diisi', () => {
+    const pred = predictNext([], '2026-10-05', {
+      lastPeriodStart: 'bukan-tanggal',
+    });
+    expect(pred.predictedStart).toBe('2026-11-02'); // todayISO + 28
+    expect(pred.confidence).toBe('rendah');
+  });
+
   it('tanpa data: avgCycleLength/avgPeriodLength dari pengaturan dipakai', () => {
     const pred = predictNext([], '2026-10-05', {
       lastPeriodStart: '2026-10-01',
