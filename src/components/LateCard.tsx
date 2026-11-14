@@ -6,10 +6,11 @@
  * beranda lewat callback `onSudah` / `onBelum`.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { radius, spacing, type ThemeColors } from '../theme';
+import { useAppTheme } from '../lib/useAppTheme';
 import { formatID } from '../lib/dates';
 
 export interface LateCardProps {
@@ -30,6 +31,9 @@ export function LateCard({
   onBelum,
   busy = false,
 }: LateCardProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.card} accessibilityRole="none">
       <View style={styles.eyebrowRow}>
@@ -80,14 +84,15 @@ export function LateCard({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
-    backgroundColor: '#FFF4CF',
+    backgroundColor: colors.calloutBg,
     borderRadius: radius.xl,
     paddingVertical: spacing.md + 2,
     paddingHorizontal: spacing.lg,
     marginHorizontal: spacing.md,
-    shadowColor: '#B98A1E',
+    shadowColor: colors.calloutShadow,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 18,
@@ -104,14 +109,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.accentYellow,
     borderWidth: 1.5,
-    borderColor: '#B98A1E',
+    borderColor: colors.calloutShadow,
     marginRight: spacing.sm,
   },
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 2,
-    color: '#8A6A00',
+    color: colors.calloutText,
   },
   title: {
     fontFamily: 'Georgia',
@@ -123,7 +128,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 13,
     lineHeight: 19,
-    color: '#6B5530',
+    color: colors.calloutSubtext,
     marginBottom: spacing.md,
   },
   buttonRow: {
@@ -135,10 +140,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: 13,
     alignItems: 'center',
-    backgroundColor: 'rgba(74,44,52,0.08)',
+    backgroundColor: colors.ghostFill,
   },
   buttonGhostPressed: {
-    backgroundColor: 'rgba(74,44,52,0.16)',
+    backgroundColor: colors.ghostFillPressed,
   },
   buttonGhostText: {
     color: colors.ink,
@@ -161,11 +166,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.roseDark,
   },
   buttonPrimaryText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontWeight: '800',
     fontSize: 15,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
-});
+  });
+}

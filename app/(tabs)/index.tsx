@@ -25,7 +25,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, radius, spacing } from '../../src/theme';
+import { radius, spacing, type ThemeColors } from '../../src/theme';
+import { useAppTheme } from '../../src/lib/useAppTheme';
 import {
   addPeriod,
   deletePeriod,
@@ -96,6 +97,8 @@ type SheetState = {
 };
 
 export default function HomeScreen() {
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const params = useLocalSearchParams<{ date?: string }>();
   const preselectDate = useMemo(() => {
     const raw = Array.isArray(params.date) ? params.date[0] : params.date;
@@ -303,7 +306,7 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <StatusBar style="dark" />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <ActivityIndicator size="large" color={colors.roseDark} />
         <Text style={styles.loadingText}>Memuat…</Text>
       </SafeAreaView>
@@ -313,7 +316,7 @@ export default function HomeScreen() {
   if (loadError) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <StatusBar style="dark" />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <Text style={styles.errorEmoji}>🌧️</Text>
         <Text style={styles.errorTitle}>Ups, gagal memuat</Text>
         <Text style={styles.errorBody}>{loadError}</Text>
@@ -353,7 +356,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -467,7 +470,8 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.krem,
@@ -509,7 +513,7 @@ const styles = StyleSheet.create({
   todayPillText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#5A3A00',
+    color: colors.onYellow,
     letterSpacing: 1,
   },
   greeting: {
@@ -522,7 +526,7 @@ const styles = StyleSheet.create({
   },
   greetingSub: {
     fontSize: 13,
-    color: '#A07080',
+    color: colors.subtle,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },
@@ -552,7 +556,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: 5,
-    shadowColor: '#C46A82',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
     shadowRadius: 6,
@@ -571,7 +575,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentYellow,
   },
   legendDotFertile: {
-    backgroundColor: 'rgba(255,93,143,0.3)',
+    backgroundColor: colors.fertileSoft,
   },
   legendDotOvulation: {
     backgroundColor: colors.accent,
@@ -583,7 +587,7 @@ const styles = StyleSheet.create({
   },
   legendHint: {
     fontSize: 11,
-    color: '#B79AA3',
+    color: colors.faint,
     textAlign: 'center',
     marginTop: spacing.xs,
     paddingHorizontal: spacing.lg,
@@ -610,7 +614,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.roseDark,
   },
   addButtonText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontSize: 17,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -644,7 +648,7 @@ const styles = StyleSheet.create({
   },
   errorBody: {
     fontSize: 13,
-    color: '#6B4A55',
+    color: colors.muted,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
@@ -658,8 +662,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.roseDark,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontWeight: '800',
     fontSize: 15,
   },
-});
+  });
+}

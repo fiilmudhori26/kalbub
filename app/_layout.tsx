@@ -20,7 +20,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect, useState } from 'react';
 
-import { colors } from '../src/theme';
+import { useAppTheme } from '../src/lib/useAppTheme';
 import { getSetting } from '../src/lib/db';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -28,6 +28,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
+  const { colors } = useAppTheme();
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
   // Cek sekali saat mount — lihat catatan di atas mengapa bukan per-navigasi.

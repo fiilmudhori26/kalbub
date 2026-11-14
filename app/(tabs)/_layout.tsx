@@ -8,7 +8,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { Text } from 'react-native';
 
-import { colors } from '../../src/theme';
+import { useAppTheme } from '../../src/lib/useAppTheme';
 
 function tabIcon(emoji: string) {
   return function TabIcon({ focused }: { focused: boolean }) {
@@ -26,16 +26,17 @@ function tabIcon(emoji: string) {
 }
 
 export default function TabsLayout() {
+  const { colors } = useAppTheme();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         sceneStyle: { backgroundColor: colors.krem },
         tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: '#B79AA3',
+        tabBarInactiveTintColor: colors.faint,
         tabBarStyle: {
           backgroundColor: colors.card,
-          borderTopColor: 'rgba(196,106,130,0.18)',
+          borderTopColor: colors.divider,
           borderTopWidth: 1,
         },
         tabBarLabelStyle: {

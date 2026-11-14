@@ -15,7 +15,8 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { radius, spacing, type ThemeColors } from '../theme';
+import { useAppTheme } from '../lib/useAppTheme';
 import { parseISO, todayISO } from '../lib/dates';
 import type { Period } from '../lib/db';
 import type { Prediction } from '../lib/predictions';
@@ -118,6 +119,8 @@ export function CalendarGrid({
   const todayStr = useMemo(() => today ?? todayISO(), [today]);
   const todayParts = useMemo(() => parseISO(todayStr), [todayStr]);
   const [view, setView] = useState({ year: todayParts.y, month: todayParts.m });
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const weeks = useMemo(
     () => buildWeeks(view.year, view.month),
@@ -246,14 +249,15 @@ export function CalendarGrid({
 
 const CIRCLE = 40;
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.xl,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
     marginHorizontal: spacing.md,
-    shadowColor: '#C46A82',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
@@ -272,10 +276,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(232,138,160,0.16)',
+    backgroundColor: colors.navFill,
   },
   navPressed: {
-    backgroundColor: 'rgba(232,138,160,0.32)',
+    backgroundColor: colors.navFillPressed,
   },
   navChevron: {
     fontSize: 22,
@@ -344,7 +348,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   markFertile: {
-    backgroundColor: 'rgba(255,93,143,0.18)',
+    backgroundColor: colors.fertileFill,
   },
   todayRing: {
     borderWidth: 2,
@@ -358,15 +362,16 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   dayTextOnSolid: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontWeight: '800',
   },
   dayTextOnYellow: {
-    color: '#5A3A00',
+    color: colors.onYellow,
     fontWeight: '800',
   },
   dayTextFertile: {
     color: colors.roseDark,
     fontWeight: '700',
   },
-});
+  });
+}

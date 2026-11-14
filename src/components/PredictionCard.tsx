@@ -5,10 +5,11 @@
  * Semua tanggal diformat lewat `formatID`; confidence diberi label ramah.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { radius, spacing, type ThemeColors } from '../theme';
+import { useAppTheme } from '../lib/useAppTheme';
 import { formatID } from '../lib/dates';
 import type { Prediction } from '../lib/predictions';
 
@@ -37,6 +38,9 @@ function daysUntilLabel(daysUntil: number): string {
 }
 
 export function PredictionCard({ prediction }: PredictionCardProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   if (!prediction) {
     return (
       <View style={styles.card}>
@@ -103,14 +107,15 @@ export function PredictionCard({ prediction }: PredictionCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
-    backgroundColor: '#FCE4EA',
+    backgroundColor: colors.chipFill,
     borderRadius: radius.xl,
     paddingVertical: spacing.md + 2,
     paddingHorizontal: spacing.lg,
     marginHorizontal: spacing.md,
-    shadowColor: '#C46A82',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 18,
@@ -138,7 +143,7 @@ const styles = StyleSheet.create({
   confidenceText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#5A3A00',
+    color: colors.onYellow,
     letterSpacing: 0.3,
   },
   dateBig: {
@@ -157,7 +162,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(196,106,130,0.28)',
+    backgroundColor: colors.borderStrong,
     marginVertical: spacing.sm,
   },
   factRow: {
@@ -171,7 +176,7 @@ const styles = StyleSheet.create({
   },
   factText: {
     fontSize: 13,
-    color: '#5C3A44',
+    color: colors.factText,
     flexShrink: 1,
   },
   factStrong: {
@@ -181,7 +186,7 @@ const styles = StyleSheet.create({
   disclaimer: {
     marginTop: spacing.sm,
     fontSize: 10,
-    color: '#A87B88',
+    color: colors.disclaimer,
     fontStyle: 'italic',
   },
   emptyTitle: {
@@ -194,6 +199,7 @@ const styles = StyleSheet.create({
   emptyBody: {
     fontSize: 13,
     lineHeight: 19,
-    color: '#6B4A55',
+    color: colors.muted,
   },
-});
+  });
+}

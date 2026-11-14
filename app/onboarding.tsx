@@ -12,7 +12,7 @@
 
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -23,7 +23,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, radius, spacing } from '../src/theme';
+import { radius, spacing, type ThemeColors } from '../src/theme';
+import { useAppTheme } from '../src/lib/useAppTheme';
 import { setSetting } from '../src/lib/db';
 import {
   addDaysISO,
@@ -49,6 +50,8 @@ function clampInt(value: number, min: number, max: number): number {
 export default function OnboardingScreen() {
   const router = useRouter();
   const [today] = useState(() => todayISO());
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [lastPeriodStart, setLastPeriodStart] = useState<string>(today);
   const [cycleLength, setCycleLength] = useState(28);
@@ -99,7 +102,7 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -285,7 +288,7 @@ export default function OnboardingScreen() {
           ]}
         >
           {saving ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={colors.onAccent} />
           ) : (
             <Text style={styles.finishButtonText}>Mulai ♡</Text>
           )}
@@ -300,7 +303,8 @@ export default function OnboardingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.krem,
@@ -334,7 +338,7 @@ const styles = StyleSheet.create({
   intro: {
     fontSize: 15,
     lineHeight: 23,
-    color: '#6B4A55',
+    color: colors.muted,
     textAlign: 'center',
     marginBottom: spacing.lg,
   },
@@ -343,7 +347,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.md,
     marginBottom: spacing.md,
-    shadowColor: '#C46A82',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -361,7 +365,7 @@ const styles = StyleSheet.create({
   },
   questionHint: {
     fontSize: 11,
-    color: '#A07080',
+    color: colors.subtle,
     textAlign: 'center',
     marginTop: spacing.sm,
   },
@@ -374,7 +378,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: radius.full,
-    backgroundColor: '#FCE4EA',
+    backgroundColor: colors.chipFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -398,7 +402,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.5,
-    color: '#A07080',
+    color: colors.subtle,
     textTransform: 'uppercase',
   },
   dateBig: {
@@ -423,7 +427,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: radius.full,
-    backgroundColor: '#FCE4EA',
+    backgroundColor: colors.chipFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -447,7 +451,7 @@ const styles = StyleSheet.create({
   numberUnit: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#A07080',
+    color: colors.subtle,
     letterSpacing: 0.5,
   },
   finishButton: {
@@ -469,7 +473,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   finishButtonText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -483,11 +487,12 @@ const styles = StyleSheet.create({
   },
   footnote: {
     fontSize: 11,
-    color: '#B79AA3',
+    color: colors.faint,
     textAlign: 'center',
     marginTop: spacing.md,
   },
   bottomSpacer: {
     height: spacing.lg,
   },
-});
+  });
+}

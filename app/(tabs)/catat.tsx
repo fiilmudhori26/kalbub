@@ -29,7 +29,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, radius, spacing } from '../../src/theme';
+import { radius, spacing, type ThemeColors } from '../../src/theme';
+import { useAppTheme } from '../../src/lib/useAppTheme';
 import {
   getDailyLog,
   upsertDailyLog,
@@ -110,6 +111,8 @@ function sameStringSet(a: string[], b: string[]): boolean {
 }
 
 export default function CatatScreen() {
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const params = useLocalSearchParams<{ date?: string }>();
   const [today] = useState(() => todayISO());
   const preselect = useMemo(() => {
@@ -310,7 +313,7 @@ export default function CatatScreen() {
   if (loadingLog) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <StatusBar style="dark" />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <ActivityIndicator size="large" color={colors.roseDark} />
         <Text style={styles.loadingText}>Memuat catatan…</Text>
       </SafeAreaView>
@@ -320,7 +323,7 @@ export default function CatatScreen() {
   if (loadError) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <StatusBar style="dark" />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <Text style={styles.errorEmoji}>🌧️</Text>
         <Text style={styles.errorTitle}>Ups, gagal memuat</Text>
         <Text style={styles.errorBody}>{loadError}</Text>
@@ -341,7 +344,7 @@ export default function CatatScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -511,7 +514,7 @@ export default function CatatScreen() {
           value={note}
           onChangeText={setNote}
           placeholder="Tulis apa pun yang ingin kamu ingat hari ini…"
-          placeholderTextColor="#B79AA3"
+          placeholderTextColor={colors.faint}
           multiline
           textAlignVertical="top"
         />
@@ -533,7 +536,7 @@ export default function CatatScreen() {
           ]}
         >
           {saving ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={colors.onAccent} />
           ) : (
             <Text style={[styles.saveButtonText, saved && styles.saveButtonTextSaved]}>
               {saved ? 'Tersimpan ♡' : isToday ? 'Simpan hari ini ♡' : 'Simpan ♡'}
@@ -547,7 +550,8 @@ export default function CatatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.krem,
@@ -581,7 +585,7 @@ const styles = StyleSheet.create({
   },
   errorBody: {
     fontSize: 13,
-    color: '#6B4A55',
+    color: colors.muted,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
@@ -595,7 +599,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.roseDark,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontWeight: '800',
     fontSize: 15,
   },
@@ -621,7 +625,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
     marginBottom: spacing.sm,
-    shadowColor: '#C46A82',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -631,7 +635,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radius.full,
-    backgroundColor: '#FCE4EA',
+    backgroundColor: colors.chipFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -655,7 +659,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.5,
-    color: '#A07080',
+    color: colors.subtle,
     textTransform: 'uppercase',
   },
   dateBig: {
@@ -684,7 +688,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: spacing.sm,
     borderWidth: 1,
-    borderColor: 'rgba(196,106,130,0.3)',
+    borderColor: colors.borderInput,
   },
   stripPillActive: {
     backgroundColor: colors.accent,
@@ -700,7 +704,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.5,
-    color: '#A07080',
+    color: colors.subtle,
     textTransform: 'uppercase',
   },
   stripDay: {
@@ -710,7 +714,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   stripTextActive: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
   },
   sectionLabel: {
     fontSize: 11,
@@ -732,7 +736,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 9,
     borderWidth: 1,
-    borderColor: 'rgba(196,106,130,0.35)',
+    borderColor: colors.borderDefault,
   },
   flowPillActive: {
     backgroundColor: colors.accent,
@@ -749,10 +753,10 @@ const styles = StyleSheet.create({
   flowText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#6B4A55',
+    color: colors.muted,
   },
   flowTextActive: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontWeight: '800',
   },
   painCard: {
@@ -763,7 +767,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
-    shadowColor: '#C46A82',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -773,7 +777,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: radius.full,
-    backgroundColor: '#FCE4EA',
+    backgroundColor: colors.chipFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -804,18 +808,18 @@ const styles = StyleSheet.create({
     color: colors.accent,
   },
   painNumberZero: {
-    color: '#B79AA3',
+    color: colors.faint,
   },
   painMax: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#A07080',
+    color: colors.subtle,
     letterSpacing: 0.5,
   },
   painCaption: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B4A55',
+    color: colors.muted,
     marginTop: 2,
     textAlign: 'center',
   },
@@ -823,7 +827,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(196,106,130,0.35)',
+    borderColor: colors.borderDefault,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
     minHeight: 96,
@@ -858,15 +862,16 @@ const styles = StyleSheet.create({
     shadowColor: colors.accentYellow,
   },
   saveButtonText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontSize: 17,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   saveButtonTextSaved: {
-    color: '#5A3A00',
+    color: colors.onYellow,
   },
   bottomSpacer: {
     height: spacing.xl,
   },
-});
+  });
+}

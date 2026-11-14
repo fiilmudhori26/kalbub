@@ -6,10 +6,11 @@
  * neo-brutalist — hanya fill dan bayangan halus.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { radius, spacing, type ThemeColors } from '../theme';
+import { useAppTheme } from '../lib/useAppTheme';
 
 export const SYMPTOM_OPTIONS = [
   'Kram',
@@ -28,6 +29,9 @@ export interface SymptomChipsProps {
 }
 
 export function SymptomChips({ selected, onToggle }: SymptomChipsProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.wrap}>
       {SYMPTOM_OPTIONS.map((symptom) => {
@@ -55,7 +59,8 @@ export function SymptomChips({ selected, onToggle }: SymptomChipsProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -67,8 +72,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: 'rgba(196,106,130,0.35)',
-    shadowColor: '#C46A82',
+    borderColor: colors.borderDefault,
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -84,10 +89,11 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#6B4A55',
+    color: colors.muted,
   },
   chipTextActive: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontWeight: '700',
   },
-});
+  });
+}

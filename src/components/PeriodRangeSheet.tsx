@@ -22,7 +22,8 @@ import {
   View,
 } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { radius, spacing, type ThemeColors } from '../theme';
+import { useAppTheme } from '../lib/useAppTheme';
 import { formatID, parseISO, todayISO } from '../lib/dates';
 import { OverlappingPeriodError } from '../lib/db';
 
@@ -128,6 +129,8 @@ export function PeriodRangeSheet({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   // Reset state SECARA SINKRON saat sheet membuka/menutup (adjust-state-
   // during-render), bukan setelah paint — tidak ada frame dengan state basi.
@@ -378,7 +381,7 @@ export function PeriodRangeSheet({
               ]}
             >
               {saving ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <ActivityIndicator color={colors.onAccent} size="small" />
               ) : (
                 <Text style={styles.buttonPrimaryText}>Simpan</Text>
               )}
@@ -390,11 +393,12 @@ export function PeriodRangeSheet({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   backdropWrap: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(74,44,52,0.45)',
+    backgroundColor: colors.backdrop,
   },
   sheet: {
     backgroundColor: colors.krem,
@@ -410,7 +414,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 5,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(74,44,52,0.18)',
+    backgroundColor: colors.dragHandle,
     marginBottom: spacing.md,
   },
   title: {
@@ -441,7 +445,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     alignItems: 'center',
     minWidth: 118,
-    shadowColor: '#C46A82',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
@@ -476,10 +480,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(232,138,160,0.16)',
+    backgroundColor: colors.navFill,
   },
   navPressed: {
-    backgroundColor: 'rgba(232,138,160,0.32)',
+    backgroundColor: colors.navFillPressed,
   },
   navChevron: {
     fontSize: 20,
@@ -518,7 +522,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   dayInRange: {
-    backgroundColor: 'rgba(255,93,143,0.18)',
+    backgroundColor: colors.fertileFill,
   },
   dayPressed: {
     opacity: 0.6,
@@ -543,15 +547,15 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   dayTextEndpoint: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontWeight: '800',
   },
   dayTextFuture: {
-    color: '#CBB3BB',
+    color: colors.futureDay,
     fontWeight: '500',
   },
   errorText: {
-    color: '#B3261E',
+    color: colors.dangerText,
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
@@ -567,10 +571,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: 13,
     alignItems: 'center',
-    backgroundColor: 'rgba(74,44,52,0.08)',
+    backgroundColor: colors.ghostFill,
   },
   buttonGhostPressed: {
-    backgroundColor: 'rgba(74,44,52,0.16)',
+    backgroundColor: colors.ghostFillPressed,
   },
   buttonGhostText: {
     color: colors.ink,
@@ -589,11 +593,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.roseDark,
   },
   buttonPrimaryText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontWeight: '800',
     fontSize: 15,
   },
   buttonDisabled: {
     opacity: 0.5,
   },
-});
+  });
+}

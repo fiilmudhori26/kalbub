@@ -6,10 +6,11 @@
  * ber-highlight kuning ceria; tidak ada border neo-brutalist.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { radius, spacing, type ThemeColors } from '../theme';
+import { useAppTheme } from '../lib/useAppTheme';
 
 export const MOOD_OPTIONS = [
   { value: 'Senang', emoji: '😊' },
@@ -25,6 +26,9 @@ export interface MoodPickerProps {
 }
 
 export function MoodPicker({ value, onChange }: MoodPickerProps) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.row}>
       {MOOD_OPTIONS.map((option) => {
@@ -53,7 +57,8 @@ export function MoodPicker({ value, onChange }: MoodPickerProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -67,8 +72,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: 2,
     borderWidth: 1,
-    borderColor: 'rgba(196,106,130,0.3)',
-    shadowColor: '#C46A82',
+    borderColor: colors.borderInput,
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -88,11 +93,12 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#6B4A55',
+    color: colors.muted,
     textAlign: 'center',
   },
   labelActive: {
-    color: '#5A3A00',
+    color: colors.onYellow,
     fontWeight: '800',
   },
-});
+  });
+}
