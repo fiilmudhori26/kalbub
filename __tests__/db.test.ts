@@ -3,6 +3,7 @@ import {
   mergePeriods,
   clampPain,
   rangesOverlapOrTouch,
+  planPeriodMerge,
   OverlappingPeriodError,
 } from '../src/lib/db';
 
@@ -154,6 +155,98 @@ describe('clampPain', () => {
   it('input non-finite menjadi 0', () => {
     expect(clampPain(Number.NaN)).toBe(0);
     expect(clampPain(Number.POSITIVE_INFINITY)).toBe(0);
+  });
+});
+
+describe('planPeriodMerge', () => {
+  it('tanpa periode existing → insert dengan rentang baru', () => {
+    expect(planPeriodMerge([], '2026-10-01', '2026-10-05')).toEqual({
+      action: 'insert',
+      start: '2026-10-01',
+      end: '2026-10-05',
+    });
+  });
+
+  it('satu periode overlap → merge, id existing bertahan, union gabungan', () => {
+    expect(
+      planPeriodMerge(
+        [{ id: 7, start: '2026-10-01', end: '2026-10-05' }],
+        '2026-10-04',
+        '2026-10-07'
+      )
+    ).toEqual({
+      action: 'merge',
+      keepId: 7,
+      union: { start: '2026-10-01', end: '2026-10-07' },
+      deleteIds: [],
+    });
+  });
+
+  it('periode bersebelahan → merge juga (bukan insert)', () => {
+    expect(
+      planPeriodMerge(
+        [{ id: 4, start: '2026-10-01', end: '2026-10-05' }],
+        '2026-10-06',
+        '2026-10-08'
+      )
+    ).toEqual({
+      action: 'merge',
+      keepId: 4,
+      union: { start: '2026-10-01', end: '2026-10-08' },
+      deleteIds: [],
+    });
+  });
+
+  it('beberapa periode → keepId = start paling awal (tie-break id terkecil)', () => {
+    const plan = planPeriodMerge(
+      [
+        { id: 9, start: '2026-10-03', end: '2026-10-05' },
+        { id: 2, start: '2026-09-28', end: '2026-10-02' },
+      ],
+      '2026-10-01',
+      '2026-10-07'
+    );
+    expect(plan).toEqual({
+      action: 'merge',
+      keepId: 2,
+      union: { start: '2026-09-28', end: '2026-10-07' },
+      deleteIds: [9],
+    });
+  });
+
+  it('input tidak terurut → tetap keepId paling awal', () => {
+    const plan = planPeriodMerge(
+      [
+        { id: 2, start: '2026-09-28', end: '2026-10-02' },
+        { id: 9, start: '2026-10-03', end: '2026-10-05' },
+      ],
+      '2026-10-01',
+      '2026-10-07'
+    );
+    expect(plan).toEqual({
+      action: 'merge',
+      keepId: 2,
+      union: { start: '2026-09-28', end: '2026-10-07' },
+      deleteIds: [9],
+    });
+  });
+
+  it('keepId tie-break by id terkecil saat start sama', () => {
+    const plan = planPeriodMerge(
+      [
+        { id: 8, start: '2026-10-01', end: '2026-10-02' },
+        { id: 3, start: '2026-10-01', end: '2026-10-03' },
+      ],
+      '2026-10-02',
+      '2026-10-04'
+    );
+    expect(plan).toMatchObject({ action: 'merge', keepId: 3, deleteIds: [8] });
+  });
+
+  it('melempar error untuk rentang terbalik', () => {
+    expect(() =>
+      planPeriodMerge([], '2026-10-05', '2026-10-01')
+    ).toThrow();
   });
 });
 

@@ -11,8 +11,13 @@
  *
  * Kontrak periode: rentang disimpan inklusif (start..end). `addPeriod`
  * menggabung (merge) rentang yang tumpang-tindih ATAU bersebelahan dengan
- * periode existing menjadi satu periode. `updatePeriod` menolak (throw
+ * periode existing menjadi satu periode. Saat merge, baris existing paling
+ * awal (start ASC, id ASC) di-UPDATE di tempat sehingga id-nya bertahan;
+ * periode lain yang tergabung dihapus. `updatePeriod` menolak (throw
  * `OverlappingPeriodError`) bila rentang baru menabrak periode LAIN.
+ * Semua mutasi periode berjalan dalam `withExclusiveTransactionAsync`
+ * (koneksi terpisah, semua query di dalamnya lewat `txn`) sehingga
+ * aman dari panggilan konkuren (mis. double-tap Simpan).
  */
 
 import { addDaysISO, parseISO } from './dates';
@@ -117,6 +122,51 @@ export function clampPain(pain: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// Perencanaan merge periode (murni, diekspor untuk test)
+// ---------------------------------------------------------------------------
+
+export type PeriodMergePlan =
+  | { action: 'insert'; start: string; end: string }
+  | {
+      action: 'merge';
+      /** id periode existing paling awal (start ASC, id ASC) — baris ini di-UPDATE, id-nya bertahan */
+      keepId: number;
+      union: PeriodRange;
+      /** id periode existing lain yang digabung & dihapus */
+      deleteIds: number[];
+    };
+
+/**
+ * Rencanakan penambahan periode [start, end] terhadap daftar periode existing
+ * yang sudah diketahui intersect (tumpang-tindih/bersebelahan).
+ * - Kosong → `insert`.
+ * - Ada → `merge`: keepId = periode existing dengan start paling awal
+ *   (tie-break id terkecil); union = gabungan semua rentang + rentang baru.
+ */
+export function planPeriodMerge(
+  existing: Period[],
+  start: string,
+  end: string
+): PeriodMergePlan {
+  validateRange(start, end);
+  if (existing.length === 0) {
+    return { action: 'insert', start, end };
+  }
+  const sorted = [...existing].sort(
+    (a, b) => a.start.localeCompare(b.start) || a.id - b.id
+  );
+  // Semua existing intersect dengan [start, end], jadi selalu satu union rentang.
+  const [union] = mergePeriods([...sorted, { start, end }]);
+  const keepId = sorted[0].id;
+  return {
+    action: 'merge',
+    keepId,
+    union: { start: union.start, end: union.end },
+    deleteIds: sorted.slice(1).map((p) => p.id),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Akses database (expo-sqlite, lazy supaya test jest tidak menyentuh native)
 // ---------------------------------------------------------------------------
 
@@ -201,35 +251,38 @@ async function findIntersecting(
 
 /**
  * Tambah periode. Rentang yang tumpang-tindih atau bersebelahan dengan
- * periode existing digabung otomatis menjadi satu periode.
+ * periode existing digabung otomatis menjadi satu periode. Baris existing
+ * paling awal di-UPDATE di tempat (id bertahan); baris lain yang tergabung
+ * dihapus. Berjalan dalam exclusive transaction — aman dari panggilan konkuren.
  */
 export async function addPeriod(start: string, end: string): Promise<Period> {
   validateRange(start, end);
   const database = await requireDb();
 
   let created: Period | null = null;
-  await database.withTransactionAsync(async () => {
-    const intersecting = await findIntersecting(database, start, end);
-    if (intersecting.length === 0) {
-      const result = await database.runAsync(
+  await database.withExclusiveTransactionAsync(async (txn) => {
+    const existing = await findIntersecting(txn, start, end);
+    const plan = planPeriodMerge(existing, start, end);
+    if (plan.action === 'insert') {
+      const result = await txn.runAsync(
         'INSERT INTO periods (start, end) VALUES (?, ?)',
-        [start, end]
+        [plan.start, plan.end]
       );
-      created = { id: result.lastInsertRowId, start, end };
+      created = { id: result.lastInsertRowId, start: plan.start, end: plan.end };
       return;
     }
-    // Semua yang intersect dengan rentang baru saling terhubung lewat rentang
-    // itu, jadi hasil merge pasti satu rentang.
-    const [union] = mergePeriods([...intersecting, { start, end }]);
-    await database.runAsync(
-      `DELETE FROM periods WHERE id IN (${intersecting.map(() => '?').join(',')})`,
-      intersecting.map((p) => p.id)
-    );
-    const result = await database.runAsync(
-      'INSERT INTO periods (start, end) VALUES (?, ?)',
-      [union.start, union.end]
-    );
-    created = { id: result.lastInsertRowId, start: union.start, end: union.end };
+    await txn.runAsync('UPDATE periods SET start = ?, end = ? WHERE id = ?', [
+      plan.union.start,
+      plan.union.end,
+      plan.keepId,
+    ]);
+    if (plan.deleteIds.length > 0) {
+      await txn.runAsync(
+        `DELETE FROM periods WHERE id IN (${plan.deleteIds.map(() => '?').join(',')})`,
+        plan.deleteIds
+      );
+    }
+    created = { id: plan.keepId, start: plan.union.start, end: plan.union.end };
   });
   if (!created) {
     throw new Error('Gagal menyimpan periode');
@@ -250,19 +303,19 @@ export async function updatePeriod(
   const database = await requireDb();
 
   let updated: Period | null = null;
-  await database.withTransactionAsync(async () => {
-    const existing = await database.getFirstAsync<Period>(
+  await database.withExclusiveTransactionAsync(async (txn) => {
+    const existing = await txn.getFirstAsync<Period>(
       'SELECT id, start, end FROM periods WHERE id = ?',
       [id]
     );
     if (!existing) {
       throw new Error(`Periode dengan id ${id} tidak ditemukan`);
     }
-    const others = await findIntersecting(database, start, end, id);
+    const others = await findIntersecting(txn, start, end, id);
     if (others.length > 0) {
       throw new OverlappingPeriodError();
     }
-    await database.runAsync('UPDATE periods SET start = ?, end = ? WHERE id = ?', [
+    await txn.runAsync('UPDATE periods SET start = ?, end = ? WHERE id = ?', [
       start,
       end,
       id,
@@ -278,7 +331,9 @@ export async function updatePeriod(
 /** Hapus periode. Tidak error bila id tidak ada. */
 export async function deletePeriod(id: number): Promise<void> {
   const database = await requireDb();
-  await database.runAsync('DELETE FROM periods WHERE id = ?', [id]);
+  await database.withExclusiveTransactionAsync(async (txn) => {
+    await txn.runAsync('DELETE FROM periods WHERE id = ?', [id]);
+  });
 }
 
 /** Semua periode, urut start ASC. */
@@ -393,9 +448,9 @@ export async function setSetting(key: string, value: string): Promise<void> {
 /** Hapus SEMUA data (periods, daily_logs, settings). Untuk tab Atur. */
 export async function resetAll(): Promise<void> {
   const database = await requireDb();
-  await database.withTransactionAsync(async () => {
-    await database.runAsync('DELETE FROM periods');
-    await database.runAsync('DELETE FROM daily_logs');
-    await database.runAsync('DELETE FROM settings');
+  await database.withExclusiveTransactionAsync(async (txn) => {
+    await txn.runAsync('DELETE FROM periods');
+    await txn.runAsync('DELETE FROM daily_logs');
+    await txn.runAsync('DELETE FROM settings');
   });
 }
