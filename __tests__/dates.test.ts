@@ -86,6 +86,44 @@ describe('diffDaysISO', () => {
   });
 });
 
+describe('tahun 0–99 (tanpa remap ke 1900–1999)', () => {
+  it('addDaysISO melintasi tahun 0 → 100 dengan benar', () => {
+    expect(addDaysISO('0099-12-31', 1)).toBe('0100-01-01');
+    expect(addDaysISO('0001-03-01', -1)).toBe('0001-02-28');
+  });
+
+  it('addDaysISO tahun kabisat 0 (habis dibagi 400)', () => {
+    expect(addDaysISO('0000-02-28', 1)).toBe('0000-02-29');
+  });
+
+  it('diffDaysISO menghitung selisih untuk tahun < 100', () => {
+    expect(diffDaysISO('0001-01-01', '0002-01-01')).toBe(365);
+    expect(diffDaysISO('0099-12-31', '0100-01-01')).toBe(1);
+  });
+
+  it('toISO mem-pad tahun 4 digit dan roundtrip untuk tahun < 100', () => {
+    expect(toISO(5, 1, 5)).toBe('0005-01-05');
+    expect(toISO(parseISO('0005-01-05').y, parseISO('0005-01-05').m, parseISO('0005-01-05').d)).toBe('0005-01-05');
+  });
+
+  it('weekdayID tidak bergeser untuk tahun < 100', () => {
+    // 0001-01-01 adalah Senin (proleptic Gregorian)
+    expect(weekdayID('0001-01-01')).toBe('Senin');
+  });
+});
+
+describe('toISO validasi', () => {
+  it('melempar Error untuk bulan di luar 1–12', () => {
+    expect(() => toISO(2026, 0, 1)).toThrow();
+    expect(() => toISO(2026, 13, 1)).toThrow();
+  });
+
+  it('melempar Error untuk hari di luar 1–31', () => {
+    expect(() => toISO(2026, 1, 0)).toThrow();
+    expect(() => toISO(2026, 1, 32)).toThrow();
+  });
+});
+
 describe('todayISO', () => {
   it('returns a local YYYY-MM-DD string', () => {
     expect(todayISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
