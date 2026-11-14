@@ -12,7 +12,8 @@
  */
 
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -140,6 +141,19 @@ export default function StatistikScreen() {
   }, [reloadToken]);
 
   const reload = useCallback(() => setReloadToken((t) => t + 1), []);
+
+  // Muat ulang saat tab kembali fokus (data bisa berubah di tab Catat).
+  // Fokus pertama setelah mount dilewati — useEffect di atas sudah memuat.
+  const firstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        return;
+      }
+      setReloadToken((t) => t + 1);
+    }, [])
+  );
 
   if (loading) {
     return (

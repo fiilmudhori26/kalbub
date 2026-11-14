@@ -173,13 +173,21 @@ export default function AturScreen() {
 
   const handleToggleNotif = useCallback(
     async (value: boolean) => {
-      setNotifEnabled(value);
       setNotifBusy(true);
       setNotice(null);
       try {
-        // Kontrak: string 'true' / 'false' — jangan boolean.
-        await setSetting('notificationsEnabled', value ? 'true' : 'false');
         if (value) {
+          // Nyalakan: minta izin DULU. Bila ditolak, jangan biarkan switch
+          // menyala palsu tanpa pengingat terjadwal.
+          const granted = await ensurePermission();
+          if (!granted) {
+            setNotifEnabled(false);
+            setNotice('Izin notifikasi belum diberikan — aktifkan di Pengaturan Android');
+            return;
+          }
+          setNotifEnabled(true);
+          // Kontrak: string 'true' / 'false' — jangan boolean.
+          await setSetting('notificationsEnabled', 'true');
           // Nyalakan: jadwalkan ulang dari data terkini (aman dipanggil kapan saja).
           const [periods, cycleRaw, periodRaw, lastRaw] = await Promise.all([
             listPeriods(),
@@ -194,6 +202,9 @@ export default function AturScreen() {
           });
           await rescheduleReminders(prediction.predictedStart);
         } else {
+          setNotifEnabled(false);
+          // Kontrak: string 'true' / 'false' — jangan boolean.
+          await setSetting('notificationsEnabled', 'false');
           // Matikan: rescheduleReminders(null) meng-cancel semua pengingat.
           await rescheduleReminders(null);
         }

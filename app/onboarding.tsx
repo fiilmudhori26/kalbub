@@ -3,12 +3,11 @@
  *
  * Alur: tanggal haid terakhir mulai (default hari ini, tidak boleh masa
  * depan) → rata-rata siklus (20–45, bawaan 28) → durasi haid (2–10,
- * bawaan 5). Saat selesai:
- *   1. setSetting onboardingDone/lastPeriodStart/avgCycleLength/avgPeriodLength
- *   2. ensurePermission() — izin notifikasi diminta di sini, BUKAN first paint
- *   3. predictNext([], …) + rescheduleReminders — pengingat dijadwalkan
- *      dari setting onboarding karena belum ada periode tercatat
- *   4. router.replace('/') ke tab Kalender
+ * bawaan 5). Saat selesai: lastPeriodStart/avgCycleLength/avgPeriodLength
+ * → ensurePermission() (izin notifikasi diminta di sini, BUKAN first
+ * paint) → predictNext([], …) + rescheduleReminders → BARU setSetting
+ * onboardingDone (paling terakhir, supaya kegagalan di langkah awal tidak
+ * mengunci gate) → router.replace('/') ke tab Kalender.
  */
 
 import { StatusBar } from 'expo-status-bar';
@@ -75,7 +74,9 @@ export default function OnboardingScreen() {
     setSaving(true);
     setError(null);
     try {
-      await setSetting('onboardingDone', 'true');
+      // Urutan penting: 'onboardingDone' ditulis PALING TERAKHIR. Bila ada
+      // langkah sebelumnya yang gagal, pengguna tetap dianggap belum
+      // onboarding — dan alur ini idempoten sehingga aman diulang.
       await setSetting('lastPeriodStart', lastPeriodStart);
       await setSetting('avgCycleLength', String(cycleLength));
       await setSetting('avgPeriodLength', String(periodLength));
@@ -87,6 +88,7 @@ export default function OnboardingScreen() {
         avgPeriodLength: periodLength,
       });
       await rescheduleReminders(prediction.predictedStart);
+      await setSetting('onboardingDone', 'true');
       router.replace('/');
     } catch {
       setError('Gagal menyimpan. Coba lagi ya, Bububb.');

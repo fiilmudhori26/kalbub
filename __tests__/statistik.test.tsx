@@ -18,6 +18,11 @@ jest.mock('expo-status-bar', () => ({
   StatusBar: () => null,
 }));
 
+// useFocusEffect butuh navigation context — no-op di lingkungan test.
+jest.mock('expo-router', () => ({
+  useFocusEffect: () => {},
+}));
+
 jest.mock('react-native-safe-area-context', () => {
   const { View } =
     jest.requireActual<typeof import('react-native')>('react-native');
