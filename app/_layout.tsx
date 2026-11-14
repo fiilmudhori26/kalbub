@@ -4,11 +4,11 @@ import { useEffect } from 'react';
 
 import { colors } from '../src/theme';
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   useEffect(() => {
-    SplashScreen.hideAsync();
+    SplashScreen.hideAsync().catch(() => {});
   }, []);
 
   return (
