@@ -12,10 +12,11 @@
  *   pada first paint.
  * - `rescheduleReminders(predictedStart)` meng-cancel SEMUA scheduled
  *   notification milik app ini (prefix id `kalbub.reminder.`), lalu
- *   menjadwalkan ulang H-2 & hari-H jam 09:00 waktu lokal. Jika
- *   `predictedStart` null / sudah lewat tanpa konfirmasi / pengingat
- *   dimatikan (`notificationsEnabled === 'false'`) - TIDAK ada yang
- *   dijadwalkan (setelah cancel).
+ *   menjadwalkan ulang H-2 & hari-H pada jam lokal `notifHour:notifMinute`
+ *   (bawaan 09:00). Gaya pesan dari setting `notifCopy` ('hangat' | 'singkat',
+ *   bawaan 'hangat'). Jika `predictedStart` null / sudah lewat tanpa
+ *   konfirmasi / pengingat dimatikan (`notificationsEnabled === 'false'`) -
+ *   TIDAK ada yang dijadwalkan (setelah cancel).
  * - Tidak ada push/remote - hanya scheduled local notifications.
  * - Teks kunci layar boleh menampilkan teks asli (tanpa masking).
  */
@@ -25,6 +26,42 @@ import { addDaysISO, diffDaysISO, formatID, parseISO, todayISO } from './dates';
 import { getSetting } from './db';
 
 export type ShouldSchedule = 'none' | 'h-2' | 'h-0' | 'both';
+
+export type NotifCopy = 'hangat' | 'singkat';
+
+export interface NotifClock {
+  /** 0–23 */
+  hour: number;
+  /** 0–59 */
+  minute: number;
+}
+
+function clampIntOr(raw: string | null, min: number, max: number, fallback: number): number {
+  if (!raw) {
+    return fallback;
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+/** Parse setting jam (0–23) & menit (0–59), defensif. Bawaan 09:00. */
+export function parseNotifClock(
+  hourRaw: string | null,
+  minuteRaw: string | null
+): NotifClock {
+  return {
+    hour: clampIntOr(hourRaw, 0, 23, 9),
+    minute: clampIntOr(minuteRaw, 0, 59, 0),
+  };
+}
+
+/** Parse setting gaya pesan. Selain 'singkat' → 'hangat'. */
+export function parseNotifCopy(raw: string | null): NotifCopy {
+  return raw === 'singkat' ? 'singkat' : 'hangat';
+}
 
 /**
  * Keputusan murni: notifikasi mana yang layak dijadwalkan untuk satu
@@ -135,13 +172,26 @@ export async function ensurePermission(): Promise<boolean> {
   }
 }
 
-/** Date lokal jam 09:00 untuk `iso`. */
-function atNineAM(iso: string): Date {
+/** Date lokal untuk `iso` pada jam:menit yang diberikan. */
+function atLocalTime(iso: string, clock: NotifClock): Date {
   const { y, m, d } = parseISO(iso);
-  return new Date(y, m - 1, d, 9, 0, 0, 0);
+  return new Date(y, m - 1, d, clock.hour, clock.minute, 0, 0);
 }
 
-function buildBody(predictedStart: string, which: 'h-2' | 'h-0'): string {
+/**
+ * Isi notifikasi H-2 / hari-H sesuai gaya pesan.
+ * 'hangat' (bawaan): kalimat penuh personal; 'singkat': padat & to the point.
+ */
+export function buildBody(
+  predictedStart: string,
+  which: 'h-2' | 'h-0',
+  copy: NotifCopy
+): string {
+  if (copy === 'singkat') {
+    return which === 'h-2'
+      ? 'H-2 menjelang haid, Bububb'
+      : 'Haid diperkirakan hari ini, Bububb';
+  }
   if (which === 'h-2') {
     return `Bububb, haid diperkirakan akan datang sekitar ${formatID(
       predictedStart
@@ -151,12 +201,13 @@ function buildBody(predictedStart: string, which: 'h-2' | 'h-0'): string {
 }
 
 /**
- * Cancel semua reminder milik app, lalu jadwalkan ulang H-2 & hari-H (09:00
- * lokal) berdasarkan `predictedStart`. Jika `predictedStart` null / sudah
- * lewat tanpa konfirmasi / pengingat dimatikan di pengaturan → hanya cancel,
+ * Cancel semua reminder milik app, lalu jadwalkan ulang H-2 & hari-H (jam
+ * lokal dari settings `notifHour:notifMinute`, bawaan 09:00) berdasarkan
+ * `predictedStart`. Jika `predictedStart` null / sudah lewat tanpa
+ * konfirmasi / pengingat dimatikan di pengaturan → hanya cancel,
  * tidak menjadwalkan apa pun.
  *
- * Trigger yang sudah lewat (mis. H-2 hari ini tapi jam 09:00 sudah lewat)
+ * Trigger yang sudah lewat (mis. H-2 hari ini tapi jam pengingat sudah lewat)
  * dilewati agar notifikasi tidak tiba-tiba muncul / gagal dijadwalkan.
  * Kegagalan native tidak melempar - pengingat tidak boleh merusak alur
  * catat-periode; error dilog lewat console.warn.
@@ -168,10 +219,18 @@ export async function rescheduleReminders(
     const Notifications = await getNotifications();
     await cancelAppReminders(Notifications);
 
-    const notificationsEnabled = await getSetting('notificationsEnabled');
+    const [notificationsEnabled, hourRaw, minuteRaw, copyRaw] =
+      await Promise.all([
+        getSetting('notificationsEnabled'),
+        getSetting('notifHour'),
+        getSetting('notifMinute'),
+        getSetting('notifCopy'),
+      ]);
     if (notificationsEnabled === 'false') {
       return;
     }
+    const clock = parseNotifClock(hourRaw, minuteRaw);
+    const copy = parseNotifCopy(copyRaw);
 
     const today = todayISO();
     const decision = shouldSchedule(predictedStart, today);
@@ -185,7 +244,7 @@ export async function rescheduleReminders(
     for (const which of jobs) {
       const dateISO =
         which === 'h-2' ? addDaysISO(predictedStart, -2) : predictedStart;
-      const triggerDate = atNineAM(dateISO);
+      const triggerDate = atLocalTime(dateISO, clock);
       if (triggerDate.getTime() <= Date.now()) {
         continue;
       }
@@ -193,7 +252,7 @@ export async function rescheduleReminders(
         identifier: which === 'h-2' ? H2_ID : H0_ID,
         content: {
           title: NOTIFICATION_TITLE,
-          body: buildBody(predictedStart, which),
+          body: buildBody(predictedStart, which, copy),
           sound: true,
         },
         trigger: {

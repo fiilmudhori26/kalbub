@@ -8,12 +8,15 @@
  * - Grafik bar sederhana (View biasa, tanpa library chart) untuk 6 siklus
  *   terakhir.
  * - Top 3 gejala paling sering dari daily_logs.
+ * - Pola mood & nyeri: ringkasan per bucket (saat haid / sebelum haid /
+ *   sisanya) — mood teratas, jumlah catatan, rata-rata nyeri 0–10.
+ *   Muncul bila ada minimal 3 daily log.
  * - Empty state hangat bila belum ada periode tercatat.
  */
 
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -24,7 +27,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, radius, spacing } from '../../src/theme';
+import { radius, spacing, type ThemeColors } from '../../src/theme';
+import { useAppTheme } from '../../src/lib/useAppTheme';
 import {
   getSetting,
   listDailyLogs,
@@ -34,6 +38,8 @@ import {
 } from '../../src/lib/db';
 import { diffDaysISO, parseISO } from '../../src/lib/dates';
 import { computeStats } from '../../src/lib/predictions';
+import { summarizeMood, type MoodBucket } from '../../src/lib/moodStats';
+import { MOOD_OPTIONS } from '../../src/components/MoodPicker';
 
 const CHART_DAYS_HEIGHT = 110;
 
@@ -76,6 +82,17 @@ function buildCycleBars(periods: Period[]): CycleBar[] {
   return bars;
 }
 
+/** Emoji untuk label mood (MoodPicker); mood tak dikenal → tanpa emoji. */
+function moodEmoji(mood: string): string {
+  return MOOD_OPTIONS.find((option) => option.value === mood)?.emoji ?? '';
+}
+
+const BUCKET_ROWS: { key: MoodBucket; label: string }[] = [
+  { key: 'haid', label: 'Saat haid' },
+  { key: 'sebelum', label: 'Sebelum haid' },
+  { key: 'sisanya', label: 'Sisanya' },
+];
+
 /** Top N gejala terbanyak dari semua daily logs (urut frekuensi, lalu nama). */
 function topSymptoms(
   logs: DailyLog[],
@@ -94,6 +111,8 @@ function topSymptoms(
 }
 
 export default function StatistikScreen() {
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -155,10 +174,16 @@ export default function StatistikScreen() {
     }, [])
   );
 
+  // Hook sebelum conditional return — urutan hook harus stabil.
+  const moodSummary = useMemo(
+    () => summarizeMood(logs, periods),
+    [logs, periods]
+  );
+
   if (loading) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <StatusBar style="dark" />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <ActivityIndicator size="large" color={colors.roseDark} />
         <Text style={styles.loadingText}>Memuat statistik…</Text>
       </SafeAreaView>
@@ -168,7 +193,7 @@ export default function StatistikScreen() {
   if (loadError) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <StatusBar style="dark" />
+        <StatusBar style={isDark ? 'light' : 'dark'} />
         <Text style={styles.errorEmoji}>🌧️</Text>
         <Text style={styles.errorTitle}>Ups, gagal memuat</Text>
         <Text style={styles.errorBody}>{loadError}</Text>
@@ -196,7 +221,7 @@ export default function StatistikScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -316,13 +341,72 @@ export default function StatistikScreen() {
           </>
         )}
 
+        {/* Pola mood & nyeri */}
+        <Text style={styles.sectionLabel}>Pola mood & nyeri</Text>
+        <View style={styles.symptomsCard}>
+          {logs.length < 3 ? (
+            <Text style={styles.symptomsEmpty}>
+              Belum cukup catatan — catat mood & nyeri beberapa hari dulu ♡
+            </Text>
+          ) : (
+            <>
+              {BUCKET_ROWS.map((row, index) => {
+                const summary = moodSummary[row.key];
+                const pain = summary.avgPain;
+                return (
+                  <View key={row.key}>
+                    {index > 0 ? <View style={styles.moodDivider} /> : null}
+                    <View style={styles.moodRowHeader}>
+                      <Text style={styles.moodBucket}>{row.label}</Text>
+                      <Text style={styles.moodCount}>
+                        {summary.count} catatan
+                      </Text>
+                    </View>
+                    <View style={styles.moodRowBody}>
+                      <Text style={styles.moodTop} numberOfLines={1}>
+                        {summary.topMood
+                          ? `${moodEmoji(summary.topMood)} ${summary.topMood}`
+                          : '— belum ada mood'}
+                      </Text>
+                      <View
+                        style={styles.painBarTrack}
+                        accessibilityRole="progressbar"
+                        accessibilityLabel={`Rata-rata nyeri ${row.label}`}
+                        accessibilityValue={{
+                          min: 0,
+                          max: 10,
+                          now: pain ?? 0,
+                        }}
+                      >
+                        <View
+                          style={[
+                            styles.painBarFill,
+                            { width: `${((pain ?? 0) / 10) * 100}%` },
+                          ]}
+                        />
+                      </View>
+                      <Text style={styles.painBarValue}>
+                        {pain === null ? '–' : pain.toFixed(1)}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+              <Text style={styles.moodCaption}>
+                Rata-rata nyeri · skala 0–10
+              </Text>
+            </>
+          )}
+        </View>
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.krem,
@@ -356,7 +440,7 @@ const styles = StyleSheet.create({
   },
   errorBody: {
     fontSize: 13,
-    color: '#6B4A55',
+    color: colors.muted,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
@@ -370,7 +454,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.roseDark,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontWeight: '800',
     fontSize: 15,
   },
@@ -402,7 +486,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.xl,
     alignItems: 'center',
-    shadowColor: '#C46A82',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -423,7 +507,7 @@ const styles = StyleSheet.create({
   },
   emptyBody: {
     fontSize: 13,
-    color: '#6B4A55',
+    color: colors.muted,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -438,7 +522,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xs,
     alignItems: 'center',
-    shadowColor: '#C46A82',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -454,7 +538,7 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#A07080',
+    color: colors.subtle,
     textAlign: 'center',
     marginTop: 4,
     lineHeight: 14,
@@ -466,7 +550,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.roseDark,
     marginTop: 3,
-    backgroundColor: '#FCE4EA',
+    backgroundColor: colors.chipFill,
     borderRadius: radius.full,
     paddingHorizontal: 8,
     paddingVertical: 1,
@@ -476,7 +560,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: radius.lg,
     padding: spacing.md,
-    shadowColor: '#C46A82',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -509,17 +593,17 @@ const styles = StyleSheet.create({
   chartLabel: {
     fontSize: 9,
     fontWeight: '600',
-    color: '#A07080',
+    color: colors.subtle,
   },
   chartCaption: {
     fontSize: 10,
-    color: '#B79AA3',
+    color: colors.faint,
     textAlign: 'center',
     marginTop: spacing.sm,
   },
   chartEmpty: {
     fontSize: 13,
-    color: '#6B4A55',
+    color: colors.muted,
     textAlign: 'center',
     lineHeight: 20,
     paddingVertical: spacing.md,
@@ -529,7 +613,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.md,
     gap: spacing.sm,
-    shadowColor: '#C46A82',
+    shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -544,7 +628,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: radius.full,
-    backgroundColor: '#FCE4EA',
+    backgroundColor: colors.chipFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -563,7 +647,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   symptomBadge: {
-    backgroundColor: '#FCE4EA',
+    backgroundColor: colors.chipFill,
     borderRadius: radius.full,
     paddingHorizontal: 10,
     paddingVertical: 3,
@@ -575,10 +659,71 @@ const styles = StyleSheet.create({
   },
   symptomsEmpty: {
     fontSize: 13,
-    color: '#6B4A55',
+    color: colors.muted,
     lineHeight: 20,
+  },
+  moodRowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  moodBucket: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: colors.ink,
+    textTransform: 'uppercase',
+  },
+  moodCount: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.subtle,
+  },
+  moodRowBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  moodTop: {
+    width: 132,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.muted,
+  },
+  painBarTrack: {
+    flex: 1,
+    height: 10,
+    borderRadius: radius.full,
+    backgroundColor: colors.chipFill,
+    overflow: 'hidden',
+  },
+  painBarFill: {
+    height: '100%',
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
+  },
+  painBarValue: {
+    width: 30,
+    textAlign: 'right',
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.ink,
+    fontVariant: ['tabular-nums'],
+  },
+  moodDivider: {
+    height: 1,
+    backgroundColor: colors.divider,
+    marginVertical: spacing.sm,
+  },
+  moodCaption: {
+    fontSize: 10,
+    color: colors.faint,
+    textAlign: 'right',
+    marginTop: spacing.xs,
   },
   bottomSpacer: {
     height: spacing.xl,
   },
-});
+  });
+}
