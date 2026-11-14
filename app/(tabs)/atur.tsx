@@ -188,13 +188,24 @@ export default function AturScreen() {
           setNotifEnabled(true);
           // Kontrak: string 'true' / 'false' — jangan boolean.
           await setSetting('notificationsEnabled', 'true');
-          // Nyalakan: jadwalkan ulang dari data terkini (aman dipanggil kapan saja).
+          // Jadwalkan ulang dari data terkini — tapi JANGAN bila belum ada
+          // data sama sekali: prediksi akan fiktif. Batalkan saja dan
+          // beri tahu pengguna dengan lembut.
           const [periods, cycleRaw, periodRaw, lastRaw] = await Promise.all([
             listPeriods(),
             getSetting('avgCycleLength'),
             getSetting('avgPeriodLength'),
             getSetting('lastPeriodStart'),
           ]);
+          const hasData =
+            periods.length > 0 || validISODate(lastRaw) !== null;
+          if (!hasData) {
+            await rescheduleReminders(null);
+            setNotice(
+              'Belum ada data — pengingat akan aktif setelah catat haid pertamamu ♡'
+            );
+            return;
+          }
           const prediction = predictNext(periods, todayISO(), {
             avgCycleLength: parsePositiveInt(cycleRaw, DEFAULT_CYCLE_LENGTH),
             avgPeriodLength: parsePositiveInt(periodRaw, DEFAULT_PERIOD_LENGTH),

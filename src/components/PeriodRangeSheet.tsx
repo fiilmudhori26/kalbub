@@ -156,6 +156,10 @@ export function PeriodRangeSheet({
     if (saving) {
       return;
     }
+    // Tanggal masa depan tidak boleh dipilih sebagai hari haid.
+    if (iso > todayStr) {
+      return;
+    }
     setError(null);
     if (mode === 'single') {
       setStart(iso);
@@ -300,17 +304,24 @@ export function PeriodRangeSheet({
                       ? cell.iso > start && cell.iso < end
                       : false;
                   const isToday = cell.iso === todayStr;
+                  const isFuture = cell.iso > todayStr;
                   return (
                     <Pressable
                       key={cell.iso}
                       accessibilityRole="button"
-                      accessibilityState={{ selected: isStart || isEnd }}
-                      accessibilityLabel={`${cell.day} ${MONTHS_ID[view.month - 1]}`}
+                      accessibilityState={{
+                        selected: isStart || isEnd,
+                        disabled: isFuture,
+                      }}
+                      accessibilityLabel={`${cell.day} ${MONTHS_ID[view.month - 1]}${
+                        isFuture ? ', tidak tersedia' : ''
+                      }`}
+                      disabled={isFuture}
                       onPress={() => handleDayPress(cell.iso)}
                       style={({ pressed }) => [
                         styles.dayCell,
                         inRange && styles.dayInRange,
-                        pressed && styles.dayPressed,
+                        pressed && !isFuture && styles.dayPressed,
                       ]}
                     >
                       <View
@@ -324,6 +335,7 @@ export function PeriodRangeSheet({
                           style={[
                             styles.dayText,
                             (isStart || isEnd) && styles.dayTextEndpoint,
+                            isFuture && styles.dayTextFuture,
                           ]}
                         >
                           {cell.day}
@@ -533,6 +545,10 @@ const styles = StyleSheet.create({
   dayTextEndpoint: {
     color: '#FFFFFF',
     fontWeight: '800',
+  },
+  dayTextFuture: {
+    color: '#CBB3BB',
+    fontWeight: '500',
   },
   errorText: {
     color: '#B3261E',

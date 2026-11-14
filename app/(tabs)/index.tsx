@@ -12,10 +12,11 @@
  */
 
 import { StatusBar } from 'expo-status-bar';
-import { useLocalSearchParams } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -27,6 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../../src/theme';
 import {
   addPeriod,
+  deletePeriod,
   getSetting,
   listPeriods,
   setSetting,
@@ -133,40 +135,70 @@ export default function HomeScreen() {
     []
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [freshPeriods, avgCycleRaw, avgPeriodRaw, lastStart, dismissed] =
-        await Promise.all([
-          listPeriods(),
-          getSetting('avgCycleLength'),
-          getSetting('avgPeriodLength'),
-          getSetting('lastPeriodStart'),
-          getSetting('lateDismissedFor'),
-        ]);
-      const currentSettings: PredictionSettings = {
-        avgCycleLength: parsePositiveNumber(avgCycleRaw),
-        avgPeriodLength: parsePositiveNumber(avgPeriodRaw),
-        lastPeriodStart: lastStart && isValidISO(lastStart) ? lastStart : null,
-      };
-      setSettings(currentSettings);
-      setDismissedFor(dismissed);
-      applyFresh(freshPeriods, currentSettings);
-    } catch (err) {
-      setLoadError(
-        err instanceof Error && err.message
-          ? err.message
-          : 'Gagal memuat data. Coba lagi ya.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [applyFresh]);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    Promise.all([
+      listPeriods(),
+      getSetting('avgCycleLength'),
+      getSetting('avgPeriodLength'),
+      getSetting('lastPeriodStart'),
+      getSetting('lateDismissedFor'),
+    ])
+      .then(
+        ([freshPeriods, avgCycleRaw, avgPeriodRaw, lastStart, dismissed]) => {
+          if (cancelled) {
+            return;
+          }
+          const currentSettings: PredictionSettings = {
+            avgCycleLength: parsePositiveNumber(avgCycleRaw),
+            avgPeriodLength: parsePositiveNumber(avgPeriodRaw),
+            lastPeriodStart:
+              lastStart && isValidISO(lastStart) ? lastStart : null,
+          };
+          setSettings(currentSettings);
+          setDismissedFor(dismissed);
+          applyFresh(freshPeriods, currentSettings);
+        }
+      )
+      .catch((err: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        setLoadError(
+          err instanceof Error && err.message
+            ? err.message
+            : 'Gagal memuat data. Coba lagi ya.'
+        );
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadToken, applyFresh]);
+
+  const load = useCallback(() => setReloadToken((t) => t + 1), []);
+
+  // Muat ulang saat tab kembali fokus (data bisa berubah di tab Atur —
+  // mis. reset data). Fokus pertama setelah mount dilewati — useEffect
+  // di atas sudah memuat.
+  const firstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        return;
+      }
+      setReloadToken((t) => t + 1);
+    }, [])
+  );
 
   /**
    * Simpan periode → baca ulang daftar → hitung prediksi baru → jadwalkan
@@ -184,6 +216,59 @@ export default function HomeScreen() {
       setNotice('Haid tercatat ♡');
     },
     [applyFresh, settings]
+  );
+
+  /**
+   * Hapus periode yang ter-tap → baca ulang daftar → hitung prediksi baru →
+   * jadwalkan ulang pengingat (atau batalkan bila tidak ada data tersisa).
+   */
+  const confirmDeletePeriod = useCallback(
+    async (period: Period) => {
+      setBusy(true);
+      try {
+        await deletePeriod(period.id);
+        const fresh = await listPeriods();
+        const currentSettings = settings;
+        const hasDataLeft =
+          fresh.length > 0 ||
+          (typeof currentSettings.lastPeriodStart === 'string' &&
+            isValidISO(currentSettings.lastPeriodStart));
+        const pred = predictNext(fresh, todayISO(), currentSettings);
+        await rescheduleReminders(hasDataLeft ? pred.predictedStart : null);
+        applyFresh(fresh, currentSettings);
+        setNotice('Periode dihapus ♡');
+      } catch {
+        setNotice('Gagal menghapus periode. Coba lagi ya.');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [applyFresh, settings]
+  );
+
+  const handleDayPress = useCallback(
+    (iso: string) => {
+      const period = periods.find((p) => iso >= p.start && iso <= p.end);
+      if (period) {
+        Alert.alert(
+          'Hapus periode?',
+          `Haid ${formatID(period.start)}–${formatID(period.end)} akan dihapus permanen.`,
+          [
+            { text: 'Batal', style: 'cancel' },
+            {
+              text: 'Hapus',
+              style: 'destructive',
+              onPress: () => {
+                void confirmDeletePeriod(period);
+              },
+            },
+          ]
+        );
+        return;
+      }
+      setSheet({ visible: true, mode: 'range', initialDate: iso });
+    },
+    [periods, confirmDeletePeriod]
   );
 
   const handleSudahSubmit = useCallback(
@@ -316,9 +401,7 @@ export default function HomeScreen() {
         <CalendarGrid
           periods={periods}
           prediction={cardPrediction}
-          onDayPress={(iso) =>
-            setSheet({ visible: true, mode: 'range', initialDate: iso })
-          }
+          onDayPress={handleDayPress}
           today={today}
         />
 
@@ -345,6 +428,9 @@ export default function HomeScreen() {
             <Text style={styles.legendText}>Hari ini</Text>
           </View>
         </View>
+        <Text style={styles.legendHint}>
+          Ketuk hari haid untuk menghapus periodenya
+        </Text>
 
         {/* Tombol + Haid */}
         <Pressable
@@ -494,6 +580,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderWidth: 2,
     borderColor: colors.roseDark,
+  },
+  legendHint: {
+    fontSize: 11,
+    color: '#B79AA3',
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.lg,
   },
   legendText: {
     fontSize: 11,
