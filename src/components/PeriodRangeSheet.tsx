@@ -12,7 +12,7 @@
  * terbuka. `end === start` pada mode single.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -24,6 +24,23 @@ import {
 
 import { colors, radius, spacing } from '../theme';
 import { formatID, parseISO, todayISO } from '../lib/dates';
+import { OverlappingPeriodError } from '../lib/db';
+
+/** Pesan error yang aman ditampilkan ke pengguna — pesan native SQLite tidak pernah lolos. */
+function friendlySaveError(err: unknown): string {
+  if (err instanceof OverlappingPeriodError) {
+    return err.message; // sudah Bahasa Indonesia & ramah
+  }
+  if (
+    err instanceof Error &&
+    err.message &&
+    !/sqlite|SQL|native|database|constraint/i.test(err.message)
+  ) {
+    // Error validasi buatan sendiri (validateRange/parseISO) memang Bahasa Indonesia.
+    return err.message;
+  }
+  return 'Gagal menyimpan haidmu. Coba lagi ya.';
+}
 
 export interface PeriodRangeSheetProps {
   visible: boolean;
@@ -105,25 +122,27 @@ export function PeriodRangeSheet({
 }: PeriodRangeSheetProps) {
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
-  const [view, setView] = useState({ year: 2026, month: 11 });
+  const [view, setView] = useState(() => {
+    const parts = parseISO(todayISO());
+    return { year: parts.y, month: parts.m };
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset state setiap sheet dibuka.
-  useEffect(() => {
-    if (!visible) {
-      return;
-    }
+  // Reset state SECARA SINKRON saat sheet membuka/menutup (adjust-state-
+  // during-render), bukan setelah paint — tidak ada frame dengan state basi.
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
     const preselect =
-      initialDate && isValidISO(initialDate) ? initialDate : null;
-    const anchor = preselect ?? todayISO();
-    const parts = parseISO(anchor);
+      visible && initialDate && isValidISO(initialDate) ? initialDate : null;
+    const parts = parseISO(preselect ?? todayISO());
     setView({ year: parts.y, month: parts.m });
     setStart(preselect);
     setEnd(null);
     setSaving(false);
     setError(null);
-  }, [visible, initialDate]);
+  }
 
   const weeks = useMemo(
     () => buildWeeks(view.year, view.month),
@@ -162,12 +181,10 @@ export function PeriodRangeSheet({
     setError(null);
     try {
       await onSubmit(start, mode === 'single' ? start : (end as string));
+      // Berhasil — pastikan sheet bersih untuk pembukaan berikutnya.
+      setSaving(false);
     } catch (err) {
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : 'Gagal menyimpan. Coba lagi ya.'
-      );
+      setError(friendlySaveError(err));
       setSaving(false);
     }
   };

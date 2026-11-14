@@ -315,7 +315,7 @@ export default function HomeScreen() {
         <View style={styles.sectionGap} />
         <CalendarGrid
           periods={periods}
-          prediction={prediction}
+          prediction={cardPrediction}
           onDayPress={(iso) =>
             setSheet({ visible: true, mode: 'range', initialDate: iso })
           }
