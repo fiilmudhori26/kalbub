@@ -397,6 +397,15 @@ export async function getDailyLog(date: string): Promise<DailyLog | null> {
   return row ? rowToDailyLog(row) : null;
 }
 
+/** Semua daily log, urut date ASC. Read-only — dipakai layar Statistik. */
+export async function listDailyLogs(): Promise<DailyLog[]> {
+  const database = await requireDb();
+  const rows = await database.getAllAsync<DailyLogRow>(
+    'SELECT date, flow, symptoms, mood, pain, note FROM daily_logs ORDER BY date ASC'
+  );
+  return rows.map(rowToDailyLog);
+}
+
 /** Simpan/timpa log untuk tanggal `log.date`. `pain` di-clamp 0–10. */
 export async function upsertDailyLog(log: DailyLog): Promise<void> {
   parseISO(log.date); // validasi format
