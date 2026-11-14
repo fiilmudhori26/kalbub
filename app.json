@@ -52,13 +52,19 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/00000000-0000-0000-0000-000000000000",
+      "url": "https://u.expo.dev/4443f108-f1b1-4ddb-a112-c1a2cb3da2e2",
       "fallbackToCacheTimeout": 0
     },
     "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
       "eas": {
-        "projectId": "00000000-0000-0000-0000-000000000000"
+        "projectId": "4443f108-f1b1-4ddb-a112-c1a2cb3da2e2"
       }
-    }
+    },
+    "owner": "akbar26"
   }
 }
