@@ -3,8 +3,10 @@
  *
  * Alur:
  * - Tanggal aktif dari state (default: hari ini; bisa di-preselect lewat
- *   query param `?date=YYYY-MM-DD`). Navigasi −/+ hari di header + strip
- *   14 hari terakhir; tombol "+" nonaktif untuk tanggal setelah hari ini.
+ *   query param `?date=YYYY-MM-DD` — hanya diterima bila tidak setelah hari ini).
+ *   Navigasi −/+ hari di header + strip 14 hari terakhir; tombol "+" nonaktif
+ *   untuk tanggal setelah hari ini. Pindah tanggal diblokir saat saving;
+ *   bila form belum disimpan (dirty), tampil Alert konfirmasi dulu.
  * - Log existing untuk tanggal aktif dimuat otomatis saat mount/ganti tanggal.
  * - Sections: aliran (5 pilihan), gejala (multi-select chips), suasana hati
  *   (5 opsi), nyeri 0–10 (stepper), catatan bebas.
@@ -17,6 +19,7 @@ import { useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -97,15 +100,30 @@ function relativeDayLabel(iso: string, today: string): string | null {
   return null;
 }
 
+/** Perbandingan gejala sebagai himpunan (urutan penekanan tidak penting). */
+function sameStringSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  const setA = new Set(a);
+  return b.every((s) => setA.has(s));
+}
+
 export default function CatatScreen() {
   const params = useLocalSearchParams<{ date?: string }>();
+  const [today] = useState(() => todayISO());
   const preselect = useMemo(() => {
     const raw = Array.isArray(params.date) ? params.date[0] : params.date;
-    return raw && isValidISO(raw) ? raw : null;
-  }, [params.date]);
+    if (!raw || !isValidISO(raw)) {
+      return null;
+    }
+    // Tolak tanggal di masa depan — jatuh kembali ke hari ini.
+    return raw > today ? null : raw;
+  }, [params.date, today]);
 
-  const [today] = useState(() => todayISO());
   const [date, setDate] = useState<string>(() => preselect ?? today);
+  const dateRef = React.useRef(date);
+  dateRef.current = date;
 
   const [loadingLog, setLoadingLog] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -120,6 +138,9 @@ export default function CatatScreen() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Snapshot form terakhir yang dimuat dari db (atau tersimpan) per tanggal —
+  // dipakai untuk dirty-check saat pindah tanggal.
+  const [baseline, setBaseline] = useState<DailyLog | null>(null);
 
   // Ikuti perubahan query param (mis. dibuka ulang dengan ?date=...).
   useEffect(() => {
@@ -135,19 +156,30 @@ export default function CatatScreen() {
     setLoadError(null);
     setSaved(false);
     setSaveError(null);
+    setBaseline(null);
     getDailyLog(date)
       .then((log) => {
         if (cancelled) {
           return;
         }
-        setFlow(log?.flow ?? 'none');
-        setSymptoms(log?.symptoms ?? []);
-        setMood(log?.mood ?? null);
-        setPain(log?.pain ?? 0);
-        setNote(log?.note ?? '');
+        const loaded: DailyLog = {
+          date,
+          flow: log?.flow ?? 'none',
+          symptoms: log?.symptoms ?? [],
+          mood: log?.mood ?? null,
+          pain: log?.pain ?? 0,
+          note: log?.note ?? '',
+        };
+        setFlow(loaded.flow);
+        setSymptoms(loaded.symptoms);
+        setMood(loaded.mood);
+        setPain(loaded.pain);
+        setNote(loaded.note);
+        setBaseline(loaded);
       })
       .catch(() => {
         if (!cancelled) {
+          setBaseline(null);
           setLoadError('Gagal memuat catatan tanggal ini. Coba lagi ya.');
         }
       })
@@ -170,6 +202,53 @@ export default function CatatScreen() {
     return () => clearTimeout(timer);
   }, [saved]);
 
+  // Perbandingan form vs baseline — dipakai dirty-check saat pindah tanggal.
+  const isDirty = useMemo(() => {
+    if (!baseline) {
+      return false;
+    }
+    return (
+      baseline.flow !== flow ||
+      baseline.mood !== mood ||
+      baseline.pain !== pain ||
+      baseline.note !== note.trim() ||
+      !sameStringSet(baseline.symptoms, symptoms)
+    );
+  }, [baseline, flow, symptoms, mood, pain, note]);
+
+  // Reset status "Tersimpan" + pesan error setiap kali form diedit setelah save.
+  useEffect(() => {
+    setSaved(false);
+    setSaveError(null);
+  }, [flow, symptoms, mood, pain, note]);
+
+  // Pindah tanggal: diblokir saat saving; bila form dirty, minta konfirmasi
+  // dulu (Alert) dan baru pindah bila pengguna memilih membuang perubahan.
+  const requestDateChange = useCallback(
+    (target: string) => {
+      if (saving || target === date) {
+        return;
+      }
+      if (isDirty) {
+        Alert.alert(
+          'Perubahan belum disimpan',
+          'Pindah tanggal dan buang perubahan?',
+          [
+            { text: 'Tetap di sini', style: 'cancel' },
+            {
+              text: 'Buang & pindah',
+              style: 'destructive',
+              onPress: () => setDate(target),
+            },
+          ]
+        );
+        return;
+      }
+      setDate(target);
+    },
+    [saving, date, isDirty]
+  );
+
   const stripDates = useMemo(
     () => Array.from({ length: STRIP_DAYS }, (_, i) => addDaysISO(today, i - (STRIP_DAYS - 1))),
     [today]
@@ -183,13 +262,14 @@ export default function CatatScreen() {
 
   const shiftDate = useCallback(
     (delta: number) => {
-      setDate((current) => {
-        const next = addDaysISO(current, delta);
-        // Jangan izinkan tanggal setelah hari ini.
-        return next > today ? current : next;
-      });
+      const next = addDaysISO(date, delta);
+      // Jangan izinkan tanggal setelah hari ini.
+      if (next > today) {
+        return;
+      }
+      requestDateChange(next);
     },
-    [today]
+    [date, today, requestDateChange]
   );
 
   const isToday = date === today;
@@ -197,21 +277,31 @@ export default function CatatScreen() {
   const canGoNext = date < today;
 
   const handleSave = useCallback(async () => {
-    setSaving(true);
-    setSaveError(null);
+    // Tangkap tanggal aktif saat save mulai — dipakai guard race bila
+    // tanggal berubah sebelum upsert selesai.
+    const saveDate = date;
     const log: DailyLog = {
-      date,
+      date: saveDate,
       flow,
       symptoms,
       mood,
       pain: clampPain(pain),
       note: note.trim(),
     };
+    setSaving(true);
+    setSaveError(null);
     try {
       await upsertDailyLog(log);
-      setSaved(true);
+      // Jangan tampilkan "Tersimpan ♡" bila tanggal aktif sudah ganti
+      // sejak save dimulai.
+      if (dateRef.current === saveDate) {
+        setBaseline(log);
+        setSaved(true);
+      }
     } catch {
-      setSaveError('Gagal menyimpan. Coba lagi ya, Bububb.');
+      if (dateRef.current === saveDate) {
+        setSaveError('Gagal menyimpan. Coba lagi ya, Bububb.');
+      }
     } finally {
       setSaving(false);
     }
@@ -265,9 +355,12 @@ export default function CatatScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Hari sebelumnya"
+            accessibilityState={{ disabled: saving }}
+            disabled={saving}
             onPress={() => shiftDate(-1)}
             style={({ pressed }) => [
               styles.dateNavButton,
+              saving && styles.dateNavButtonDisabled,
               pressed && styles.dateNavButtonPressed,
             ]}
           >
@@ -281,12 +374,12 @@ export default function CatatScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Hari berikutnya"
-            accessibilityState={{ disabled: !canGoNext }}
-            disabled={!canGoNext}
+            accessibilityState={{ disabled: !canGoNext || saving }}
+            disabled={!canGoNext || saving}
             onPress={() => shiftDate(1)}
             style={({ pressed }) => [
               styles.dateNavButton,
-              !canGoNext && styles.dateNavButtonDisabled,
+              (!canGoNext || saving) && styles.dateNavButtonDisabled,
               pressed && styles.dateNavButtonPressed,
             ]}
           >
@@ -308,11 +401,13 @@ export default function CatatScreen() {
                 key={iso}
                 accessibilityRole="button"
                 accessibilityLabel={`Pilih ${formatID(iso)}`}
-                accessibilityState={{ selected: active }}
-                onPress={() => setDate(iso)}
+                accessibilityState={{ selected: active, disabled: saving }}
+                disabled={saving}
+                onPress={() => requestDateChange(iso)}
                 style={({ pressed }) => [
                   styles.stripPill,
                   active && styles.stripPillActive,
+                  saving && styles.stripPillDisabled,
                   pressed && styles.stripPillPressed,
                 ]}
               >
@@ -597,6 +692,9 @@ const styles = StyleSheet.create({
   },
   stripPillPressed: {
     opacity: 0.75,
+  },
+  stripPillDisabled: {
+    opacity: 0.5,
   },
   stripWeekday: {
     fontSize: 9,
