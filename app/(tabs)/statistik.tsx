@@ -89,7 +89,7 @@ function moodEmoji(mood: string): string {
 
 const BUCKET_ROWS: { key: MoodBucket; label: string }[] = [
   { key: 'haid', label: 'Saat haid' },
-  { key: 'sebelum', label: 'Sebelum haid' },
+  { key: 'sebelum', label: 'Sebelum haid (≤7 hari)' },
   { key: 'sisanya', label: 'Sisanya' },
 ];
 
@@ -454,7 +454,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.roseDark,
   },
   retryButtonText: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontWeight: '800',
     fontSize: 15,
   },

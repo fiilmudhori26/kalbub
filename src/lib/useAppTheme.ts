@@ -75,6 +75,24 @@ function useSafeFocusEffect(effect: () => void | (() => void)) {
   }
 }
 
+/**
+ * Simpan mode tema: tersinkronkan ke semua instance SEKETIKA (broadcast),
+ * lalu tulis ke settings. Bila penulisan gagal — kembalikan broadcast ke
+ * mode terakhir yang diketahui valid dan lempar ulang error, supaya UI
+ * pemanggil bisa membatalkan pilihan & memberi tahu pengguna.
+ */
+async function persistThemeMode(mode: ThemeMode): Promise<void> {
+  const previous = cachedMode ?? 'system';
+  broadcast(mode);
+  try {
+    await setSetting(THEME_MODE_KEY, mode);
+  } catch (error) {
+    // Rollback ke mode terakhir yang diketahui valid.
+    broadcast(previous);
+    throw error;
+  }
+}
+
 export interface AppTheme {
   colors: ThemeColors;
   isDark: boolean;
@@ -134,8 +152,7 @@ export function useAppTheme(): AppTheme {
   const colors = isDark ? darkColors : lightColors;
 
   const setThemeMode = useCallback(async (mode: ThemeMode) => {
-    broadcast(mode);
-    await setSetting(THEME_MODE_KEY, mode);
+    await persistThemeMode(mode);
   }, []);
 
   return { colors, isDark, themeMode, setThemeMode };

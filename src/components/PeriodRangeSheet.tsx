@@ -547,7 +547,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.ink,
   },
   dayTextEndpoint: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontWeight: '800',
   },
   dayTextFuture: {
@@ -593,7 +593,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.roseDark,
   },
   buttonPrimaryText: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontWeight: '800',
     fontSize: 15,
   },

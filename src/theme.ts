@@ -36,6 +36,8 @@ const lightColors = {
   chipFill: '#FCE4EA',
   /** Teks di atas aksen/rose solid */
   onAccent: '#FFFFFF',
+  /** Teks gelap di atas aksen/rose solid (kontras ≥ 4.5:1) */
+  onAccentDark: '#3A0E1C',
   /** Teks di atas kuning */
   onYellow: '#5A3A00',
   /** Warna bayangan kartu */
@@ -110,6 +112,7 @@ export const darkColors: ThemeColors = {
   faint: '#A08594',
   chipFill: '#3B2A32',
   onAccent: '#FFFFFF',
+  onAccentDark: '#3A0E1C',
   onYellow: '#5A3A00',
   shadow: '#000000',
 

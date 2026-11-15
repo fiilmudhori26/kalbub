@@ -473,7 +473,7 @@ function createStyles(colors: ThemeColors) {
     opacity: 0.7,
   },
   finishButtonText: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 0.5,

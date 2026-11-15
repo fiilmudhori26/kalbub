@@ -362,7 +362,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.ink,
   },
   dayTextOnSolid: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontWeight: '800',
   },
   dayTextOnYellow: {

@@ -482,7 +482,9 @@ export default function AturScreen() {
                   accessibilityLabel={`Tema ${option.label}`}
                   accessibilityState={{ selected: active }}
                   onPress={() => {
-                    void setThemeMode(option.value);
+                    setThemeMode(option.value).catch(() => {
+                      setNotice('Gagal menyimpan tema, coba lagi');
+                    });
                   }}
                   style={({ pressed }) => [
                     styles.modeRow,
@@ -850,7 +852,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.roseDark,
   },
   retryButtonText: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontWeight: '800',
     fontSize: 15,
   },
@@ -1036,7 +1038,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.muted,
   },
   copyPillTextActive: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontWeight: '800',
   },
   previewCaption: {

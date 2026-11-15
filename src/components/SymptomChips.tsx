@@ -92,7 +92,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.muted,
   },
   chipTextActive: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontWeight: '700',
   },
   });

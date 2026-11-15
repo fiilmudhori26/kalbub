@@ -614,7 +614,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.roseDark,
   },
   addButtonText: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontSize: 17,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -662,7 +662,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.roseDark,
   },
   retryButtonText: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontWeight: '800',
     fontSize: 15,
   },

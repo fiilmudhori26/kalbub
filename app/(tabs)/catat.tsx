@@ -599,7 +599,7 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.roseDark,
   },
   retryButtonText: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontWeight: '800',
     fontSize: 15,
   },
@@ -714,7 +714,7 @@ function createStyles(colors: ThemeColors) {
     marginTop: 1,
   },
   stripTextActive: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
   },
   sectionLabel: {
     fontSize: 11,
@@ -756,7 +756,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.muted,
   },
   flowTextActive: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontWeight: '800',
   },
   painCard: {
@@ -862,7 +862,7 @@ function createStyles(colors: ThemeColors) {
     shadowColor: colors.accentYellow,
   },
   saveButtonText: {
-    color: colors.onAccent,
+    color: colors.onAccentDark,
     fontSize: 17,
     fontWeight: '800',
     letterSpacing: 0.5,
